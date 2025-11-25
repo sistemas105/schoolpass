@@ -1,32 +1,12 @@
-<?php include '../app/views/layouts/header.php'; ?>
 
-<div class="row justify-content-center">
-  <div class="col-md-8">
-    <div class="card shadow">
-      <div class="card-header bg-success text-white">Registro de Familia</div>
-      <div class="card-body">
-        <form method="POST" action="/register" enctype="multipart/form-data">
-          <div class="mb-3">
-            <label>Nombre completo</label>
-            <input type="text" name="full_name" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label>Email</label>
-            <input type="email" name="email" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label>Password</label>
-            <input type="password" name="password" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label>Foto o INE del padre/madre</label>
-            <input type="file" name="photo" class="form-control" accept="image/*">
-          </div>
-          <button type="submit" class="btn btn-primary w-100">Registrar</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
+<h2>Registro</h2>
+<?php if (!empty($error)) echo "<p style='color:red;'>$error</p>"; ?>
+<?php if (!empty($success)) echo "<p style='color:green;'>$success</p>"; ?>
 
-<?php include '../app/views/layouts/footer.php'; ?>
+/auth/register
+    <input type="text" name="name" placeholder="Nombre" required>
+    <input type="email" name="email" placeholder="Correo" required>
+    <input type="password" name="password" placeholder="Contraseña" required>
+    <input type="password" name="confirm" placeholder="Confirmar contraseña" required>
+    <button type="submit">Registrarse</button>
+</form>
