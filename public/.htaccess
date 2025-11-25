@@ -2,7 +2,6 @@
 RewriteEngine On
 RewriteBase /
 
-# Redirige todo a index.php y conserva PATH_INFO
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.php [QSA,L]
+RewriteRule ^(.*)$ index.php [QSA,L]
