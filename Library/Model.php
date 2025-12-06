@@ -39,16 +39,16 @@ class Model
     }
     
     // Método para insertar (adaptado a la necesidad de Index_model)
-    public function insertRow($table, array $data)
+ public function insertRow($table, array $data)
 {
     $fields = implode(', ', array_keys($data));
-    // ESTO ESTÁ BIEN: Genera placeholders con nombre (ej: :full_name, :email)
-    $placeholders = ':' . implode(', :', array_keys($data)); 
-    $values_str = " (" . $fields . ") VALUES (" . $placeholders . ")";
+    $placeholders = ':' . implode(', :', array_keys($data)); // Debe ser ":full_name, :email, ..."
+    
+    // 🛑 ATENCIÓN AQUÍ: Asegúrate que el espacio antes de "(" sea correcto
+    $values_str = " (" . $fields . ") VALUES (" . $placeholders . ")"; 
     
     $params = $data; 
     
-    // Llama al método insert de QueryManager
     return $this->db->insert($table, $params, $values_str); 
 }
     

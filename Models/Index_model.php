@@ -3,7 +3,7 @@
 
 class Index_model extends Model 
 {
-    private $table = "usuarios"; // Reemplaza 'usuarios' si tu tabla se llama diferente
+    private $table = "users"; // Reemplaza 'usuarios' si tu tabla se llama diferente
 
     public function __construct() {
         parent::__construct(); // Llama al constructor de Model para inicializar $this->db
