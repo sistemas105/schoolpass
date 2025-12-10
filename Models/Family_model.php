@@ -164,4 +164,54 @@ class Family_model extends Model
             return false;
         }
     }
+    public function generateMainUserQRCodeData(int $userId)
+    {
+        // 1. Generar un identificador único y seguro (ej. un JWT o un hash)
+        // Por motivos de simulación, usamos un hash simple basado en el ID y el tiempo actual.
+        // **REEMPLAZAR ESTO POR LÓGICA DE SEGURIDAD REAL EN PRODUCCIÓN**
+        
+        $currentTimestamp = time();
+        
+        // Cadena de datos que se leerá en el punto de control
+        // Formato: TIPO|ID|TIMESTAMP|HASH_DE_SEGURIDAD
+        $dataToEncode = "TUTOR_PRINCIPAL|{$userId}|{$currentTimestamp}";
+
+        // En producción, aquí harías una llamada a la DB para guardar este token,
+        // establecer su caducidad y recuperar los datos que necesita el lector.
+        
+        // Simulación de token/data para el QR:
+        if ($userId > 0) {
+            // Ejemplo de token seguro (se recomienda usar una librería de JWT o encriptación)
+            $secureToken = "auth-token-user-{$userId}-" . md5($dataToEncode . 'tu_clave_secreta_aqui');
+            return $secureToken;
+        }
+
+        return false;
+    }
+    public function generateRelativeQRCodeData(int $contactId)
+    {
+        if ($contactId <= 0) {
+            return false;
+        }
+
+        // Obtener el ID del usuario principal logueado para seguridad
+        $userId = Session::getSession('User')['id'] ?? 0;
+
+        // 1. Verificar que el contacto exista y pertenezca al usuario logueado.
+        $sql = "SELECT id, full_name FROM contacts WHERE id = ? AND user_id = ?";
+        $contact = $this->db->selectOne($sql, [$contactId, $userId]);
+
+        if (!$contact) {
+            return false; // Contacto no encontrado o no pertenece a este usuario
+        }
+
+        // 2. Simulación de generación de Token Único para el Contacto
+        // Formato: TIPO_CONTACTO|ID_CONTACTO|ID_USER_TITULAR|TIMESTAMP_EXPIRACION
+        $tokenPayload = "CONTACT|{$contactId}|{$userId}|" . time() . "|" . hash('sha256', $contactId . $userId . SECRET_KEY);
+        
+        // Cifrado simple (simulación de seguridad)
+        $encryptedToken = base64_encode($tokenPayload);
+
+        return $encryptedToken;
+    }
 }

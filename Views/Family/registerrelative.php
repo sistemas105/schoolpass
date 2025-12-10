@@ -1,8 +1,18 @@
 <?php
+// Este archivo contiene la vista (HTML/PHP/JS) para la gestión de contactos autorizados.
+// Dependencias esperadas:
+// 1. Clase global 'Session' con métodos getSession, deleteSession/removeSession.
+// 2. Variable global '$model1' conteniendo el array de contactos.
+// 3. Constante global 'URL' para la URL base.
+
 // =========================================================
 // FUNCIÓN DE TRADUCCIÓN DE ROL
 // =========================================================
-// Traduce las claves de la DB a nombres amigables para el usuario.
+/**
+ * Traduce las claves de rol de la DB a nombres amigables para el usuario.
+ * @param string $role Clave del rol (e.g., 'parent_primary').
+ * @return string Nombre del rol traducido.
+ */
 function translateRole($role) {
     switch ($role) {
         case 'parent_primary':
@@ -14,6 +24,7 @@ function translateRole($role) {
         case 'familiar':
             return 'Familiar / Otro';
         default:
+            // Por defecto, capitalizar y reemplazar guiones bajos por espacios.
             return ucfirst(str_replace('_', ' ', $role));
     }
 }
@@ -32,25 +43,45 @@ $can_add_new_contact = !($tiene_familiar && $tiene_emergency);
 
 // Función auxiliar para mostrar mensajes de alerta (Compatible con Bootstrap 5)
 function displayAlert() {
-    // La corrección del error fatal anterior se mantiene
-    if (class_exists('Session') && ($alert = Session::getSession('alert_message'))) {
-        echo '<div class="alert alert-' . htmlspecialchars($alert['type']) . ' alert-dismissible fade show" role="alert">';
-        echo '<strong>' . htmlspecialchars($alert['title']) . '</strong> ' . htmlspecialchars($alert['text']);
-        // Usar btn-close y data-bs-dismiss para B5
-        echo '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'; 
-        echo '</div>';
+    // Usamos el namespace de la clase Session si es posible, o asumimos que es global.
+    $alert_class = class_exists('Session') ? 'Session' : null;
+
+    if ($alert_class) {
+        // Intentar obtener el mensaje de sesión
+        $alert = $alert_class::getSession('alert_message');
         
-        // CORRECCIÓN DE ERROR FATAL: Intentar métodos conocidos para limpiar la sesión
-        if (method_exists('Session', 'deleteSession')) {
-            Session::deleteSession('alert_message');
-        } elseif (method_exists('Session', 'removeSession')) {
-            Session::removeSession('alert_message');
-        } 
+        if ($alert) {
+            // Sanitizar la salida antes de imprimir
+            $type = htmlspecialchars($alert['type'] ?? 'info');
+            $title = htmlspecialchars($alert['title'] ?? 'Alerta');
+            $text = htmlspecialchars($alert['text'] ?? '');
+            
+            echo '<div class="alert alert-' . $type . ' alert-dismissible fade show" role="alert">';
+            echo '<strong>' . $title . '</strong> ' . $text;
+            // Usar btn-close y data-bs-dismiss para B5
+            echo '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>'; 
+            echo '</div>';
+            
+            // Limpiar la sesión después de mostrar
+            if (method_exists($alert_class, 'deleteSession')) {
+                $alert_class::deleteSession('alert_message');
+            } elseif (method_exists($alert_class, 'removeSession')) {
+                $alert_class::removeSession('alert_message');
+            } 
+        }
     }
 }
 
 $URL = defined('URL') ? URL : '/'; 
+// Obtener el ID del usuario actual de forma segura
+$current_user_id = Session::getSession('User')['id'] ?? 'N/A';
 ?>
+
+<!-- Carga la librería QRCode.js -->
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+<!-- Carga de la librería de Bootstrap 5 (asumiendo que ya está cargada globalmente, pero la incluimos para el modal JS) -->
+<!-- Si Bootstrap no está globalmente accesible en la ventana, se debe cargar el script de Bootstrap 5 aquí.
+     Ejemplo: <script src=".../bootstrap.bundle.min.js"></script> -->
 
 <div class="container py-4">
     <div class="row">
@@ -59,26 +90,24 @@ $URL = defined('URL') ? URL : '/';
             
             <?php displayAlert(); ?>
 
-            <!-- Contenedor para los botones de acción superior (flex para alinear) -->
+            <!-- Contenedor para los botones de acción superior -->
             <div class="d-flex justify-content-between flex-wrap mb-3">
                 
                 <!-- Botón para ABRIR MODAL: SE MUESTRA SOLO SI SE PUEDEN AGREGAR MÁS CONTACTOS -->
                 <?php if ($can_add_new_contact): ?>
-                    <button id="btn-agregar-contacto" class="btn btn-success" type="button" 
+                    <button id="btn-agregar-contacto" class="btn btn-success mb-2 mb-md-0" type="button" 
                         data-bs-toggle="modal" 
-                        data-bs-target="#newContactModal" 
-                        aria-expanded="false" 
-                        aria-controls="newContactModal">
-                        + Agregar Nuevo Contacto
+                        data-bs-target="#newContactModal">
+                        <i class="fas fa-user-plus"></i> + Agregar Nuevo Contacto
                     </button>
                     <!-- Agregamos un pequeño espaciador si el botón de agregar está presente -->
                     <div class="mx-2 d-none d-md-block"></div>
                 <?php endif; ?>
                 
                 <!-- BOTÓN QR DEL TUTOR PRINCIPAL (USUARIO ACTUAL) -->
-                <button class="btn-qr btn-primary" onclick="generateQR('user_<?php echo Session::getSession('User')['id'] ?? 'N/A'; ?>')">
-                    Generar mi Código QR
-                </button>
+                <a href="<?php echo htmlspecialchars($URL); ?>Family/GenerateQRCode" class="btn btn-primary" role="button">
+                    <i class="fas fa-qrcode"></i> Generar mi Código QR
+                </a>
             </div>
 
 
@@ -86,7 +115,7 @@ $URL = defined('URL') ? URL : '/';
             <div class="card shadow-sm">
                 <div class="card-header bg-dark text-white">
                     <h5 class="mb-0">Contactos Registrados (Tutor ID: 
-                        <?php echo Session::getSession('User')['id'] ?? 'N/A'; ?>
+                        <?php echo htmlspecialchars($current_user_id); ?>
                     )</h5>
                 </div>
                 <div class="card-body">
@@ -106,32 +135,36 @@ $URL = defined('URL') ? URL : '/';
                                 <?php 
                                 if (!empty($contacts_list) && is_array($contacts_list)) { 
                                     foreach ($contacts_list as $contact) {
-                                        $translatedRole = translateRole($contact['role']);
-                                        $contactName = htmlspecialchars($contact['full_name']); // Nombre del contacto
-                                        $contactId = htmlspecialchars($contact['id']); // ID del contacto
+                                        $translatedRole = translateRole($contact['role'] ?? '');
+                                        // Sanitización de todas las variables
+                                        $contactName = htmlspecialchars($contact['full_name'] ?? 'Sin Nombre'); 
+                                        $contactId = htmlspecialchars($contact['id'] ?? ''); 
+                                        $contactPhone = htmlspecialchars($contact['phone'] ?? '');
+                                        $contactEmail = htmlspecialchars($contact['email'] ?? '');
+                                        $contactRole = htmlspecialchars($translatedRole);
 
                                         echo '<tr>';
                                         
                                         // Datos de Contacto (con data-label para responsive)
                                         echo '<td data-label="Nombre">' . $contactName . '</td>';
-                                        echo '<td data-label="Rol">' . htmlspecialchars($translatedRole) . '</td>'; 
-                                        echo '<td data-label="Teléfono">' . htmlspecialchars($contact['phone'] ?? 'N/A') . '</td>';
-                                        echo '<td data-label="Email">' . htmlspecialchars($contact['email'] ?? 'N/A') . '</td>';
+                                        echo '<td data-label="Rol">' . $contactRole . '</td>'; 
+                                        echo '<td data-label="Teléfono">' . ($contactPhone ?: 'N/A') . '</td>';
+                                        echo '<td data-label="Email">' . ($contactEmail ?: 'N/A') . '</td>';
                                         
-                                        // Columna de Acciones (con data-label para responsive)
+                                        // Columna de Acciones 
                                         echo '<td data-label="Acciones" class="text-center">
-                                                    <!-- Botón para generar QR de este contacto -->
-                                                    <button class="btn-qr btn-sm btn-success me-1" 
-                                                        onclick="generateQR(\'contact_' . $contactId . '\')">
-                                                        <i class="fas fa-qrcode"></i> QR
-                                                    </button>
-                                                    
-                                                    <!-- Botón Editar (Se pasó el nombre para mejor UX en el modal) -->
-                                                    <button class="btn btn-sm btn-info" 
-                                                        onclick="editContact(\'' . $contactId . '\', \'' . htmlspecialchars($contact['phone'] ?? '') . '\', \'' . htmlspecialchars($contact['email'] ?? '') . '\', \'' . $contactName . '\')">
-                                                        <i class="fas fa-edit"></i> Editar
-                                                    </button>
-                                                </td>';
+                                            <!-- Botón para generar QR de este contacto -->
+                                            <button class="btn-qr btn-sm btn-success me-1 mb-1 mb-md-0" 
+                                                onclick="generateQR(\'' . $contactId . '\', \'' . $contactName . '\')">
+                                                <i class="fas fa-qrcode"></i> QR
+                                            </button>
+                                            
+                                            <!-- Botón Editar -->
+                                            <button class="btn btn-sm btn-info" 
+                                                onclick="editContact(\'' . $contactId . '\', \'' . $contactPhone . '\', \'' . $contactEmail . '\', \'' . $contactName . '\')">
+                                                <i class="fas fa-edit"></i> Editar
+                                            </button>
+                                        </td>';
                                         echo '</tr>';
                                     }
                                 } else {
@@ -149,7 +182,6 @@ $URL = defined('URL') ? URL : '/';
 
 <!-- ============================================= -->
 <!-- MODAL DE REGISTRO DE CONTACTO (Bootstrap 5) -->
-<!-- Se mantiene para agregar nuevos contactos -->
 <!-- ============================================= -->
 <div class="modal fade" id="newContactModal" tabindex="-1" aria-labelledby="newContactModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -158,10 +190,9 @@ $URL = defined('URL') ? URL : '/';
                 <h5 class="modal-title" id="newContactModalLabel">Registrar Nuevo Familiar/Contacto</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <!-- La etiqueta <form> envuelve todo el cuerpo y el pie para capturar los datos del formulario -->
-            <form action="<?php echo $URL; ?>Family/CreateRelative" method="POST">
+            <!-- El formulario apunta a la acción de creación -->
+            <form action="<?php echo htmlspecialchars($URL); ?>Family/CreateRelative" method="POST">
                 <div class="modal-body">
-                    <!-- Contenido del formulario -->
                     <div class="form-group mb-3">
                         <label for="full_name" class="form-label">Nombre Completo del Contacto</label>
                         <input type="text" class="form-control" id="full_name" name="full_name" required>
@@ -200,6 +231,7 @@ $URL = defined('URL') ? URL : '/';
                 </div>
             </form>
         </div>
+        
     </div>
 </div>
 
@@ -210,12 +242,12 @@ $URL = defined('URL') ? URL : '/';
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-warning text-white">
-                <!-- El título se actualizará con el nombre del contacto vía JavaScript -->
+                <!-- Título actualizado por JS -->
                 <h5 class="modal-title" id="editContactModalLabel">Editar Contacto</h5> 
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <!-- El formulario apunta a la acción de edición (DEBES IMPLEMENTARLA en tu controlador) -->
-            <form id="editContactForm" action="<?php echo $URL; ?>Family/UpdateRelative" method="POST">
+            <!-- El formulario apunta a la acción de edición -->
+            <form id="editContactForm" action="<?php echo htmlspecialchars($URL); ?>Family/UpdateRelative" method="POST">
                 <!-- Campo oculto para el ID del contacto que se está editando -->
                 <input type="hidden" name="contact_id" id="edit_contact_id">
 
@@ -252,11 +284,12 @@ $URL = defined('URL') ? URL : '/';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <p id="qr_person_name" class="fw-bold text-success fs-5"></p>
+                <p id="qr_person_name" class="fw-bold text-success fs-5">Cargando...</p>
                 <!-- Aquí se inyectará la imagen del QR -->
                 <div id="qrcode_container" class="my-3 d-flex justify-content-center">
-                    <!-- Placeholder visual mientras se genera -->
-                    <img src="https://placehold.co/200x200/00bcd4/ffffff?text=Cargando+QR" alt="Cargando QR" class="img-fluid rounded shadow">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Generando Código QR...</span>
+                    </div>
                 </div>
                 <p class="text-muted small">Muestra este código al personal de la escuela para la recogida.</p>
             </div>
@@ -267,14 +300,15 @@ $URL = defined('URL') ? URL : '/';
     </div>
 </div>
 
-<!-- Librería de Font Awesome para iconos (Asumiendo que está disponible o se carga en el head) -->
-<!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> -->
-
 <script>
 /**
- * Script para manejar el modal de edición y cargar los datos del contacto.
- * Requiere que Bootstrap 5 esté cargado en tu página.
- * * @param {string} id ID del contacto
+ * Variable global para la URL base (definida en PHP)
+ */
+const BASE_URL = '<?php echo $URL; ?>';
+
+/**
+ * Función para inicializar y mostrar el modal de edición con los datos del contacto.
+ * @param {string} id ID del contacto
  * @param {string} phone Teléfono actual
  * @param {string} email Correo electrónico actual
  * @param {string} name Nombre completo del contacto (para fines de UX)
@@ -282,64 +316,71 @@ $URL = defined('URL') ? URL : '/';
 function editContact(id, phone, email, name) {
     // 1. Cargar los datos en el formulario de edición
     document.getElementById('edit_contact_id').value = id;
-    document.getElementById('edit_phone').value = phone;
-    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_phone').value = phone || ''; // Usar cadena vacía si es null/undefined
+    document.getElementById('edit_email').value = email || ''; // Usar cadena vacía si es null/undefined
     
     // 2. Actualizar el título del modal para el contexto
     document.getElementById('editContactModalLabel').innerText = 'Editar Contacto: ' + name;
 
     // 3. Mostrar el modal de edición (usando las funciones nativas de Bootstrap 5)
+    // Se asume que 'bootstrap' está disponible globalmente.
     var editModal = new bootstrap.Modal(document.getElementById('editContactModal'));
     editModal.show();
 }
 
 /**
- * Función (placeholder) para generar y mostrar el QR.
- * NECESITARÁS una librería de QR como QRCode.js o similar para la implementación final.
- * * @param {string} identifier ID del contacto o 'user_[ID]' para el tutor principal.
+ * Función que realiza una llamada AJAX para obtener el token QR de un contacto y lo muestra en un modal.
+ * Utiliza fetch para la llamada asíncrona y la librería QRCode.js para la generación.
+ * @param {string} contactId ID del contacto
+ * @param {string} contactName Nombre del contacto (para visualización)
  */
-function generateQR(identifier) {
-    // 1. Obtener la referencia al modal
+
+//funcion qr para contactos
+async function generateQR(contactId, contactName) {
     var qrModalElement = document.getElementById('qrCodeModal');
-    var qrModal = new bootstrap.Modal(qrModalElement);
+    var qrModal = bootstrap.Modal.getInstance(qrModalElement) || new bootstrap.Modal(qrModalElement);
     qrModal.show();
     
-    // 2. Determinar el nombre a mostrar
-    let personName = '';
-    const userIdMatch = identifier.match(/^user_(.*)/);
-    const contactIdMatch = identifier.match(/^contact_(.*)/);
-    
-    if (userIdMatch) {
-        // En un entorno real, obtendrías el nombre del usuario logeado
-        personName = 'Tutor Principal (ID: ' + userIdMatch[1] + ')'; 
-    } else if (contactIdMatch) {
-        // En un entorno real, harías una llamada AJAX o buscarías el nombre en la tabla de datos cargada.
-        // Aquí se usa un placeholder para el nombre ya que no se tiene la data completa en JS.
-        // Para mejorar, se podría haber guardado en un data-attribute del botón QR de la tabla.
-        personName = 'Contacto Autorizado (ID: ' + contactIdMatch[1] + ')';
-    } else {
-        personName = 'Código Desconocido';
-    }
-
-    document.getElementById('qr_person_name').innerText = personName;
-
-    // 3. Simular la generación del QR (DEBES REEMPLAZAR ESTO con la lógica real)
     const qrContainer = document.getElementById('qrcode_container');
-    
-    // Limpiar contenedor
-    qrContainer.innerHTML = ''; 
+    const personNameDisplay = document.getElementById('qr_person_name');
 
-    // Placeholder (simula el QR con el ID):
-    qrContainer.innerHTML = '<div class="spinner-border text-success" role="status"><span class="visually-hidden">Cargando...</span></div>';
+    personNameDisplay.innerText = contactName;
 
-    setTimeout(() => {
-        // ** Lógica real de generación de QR (Ejemplo con una librería) **
-        // Si usas QRCode.js, el código sería algo como:
-        // new QRCode(qrContainer, { text: identifier, width: 200, height: 200 });
+    qrContainer.innerHTML = `
+        <div class="spinner-border text-success" role="status">
+            <span class="visually-hidden">Generando Código QR...</span>
+        </div>
+    `;
 
-        // Sustituyendo el spinner por la imagen placeholder del QR
-        qrContainer.innerHTML = '<img src="https://placehold.co/200x200/28a745/ffffff?text=' + encodeURIComponent(identifier) + '" alt="Código QR" class="img-fluid rounded shadow">';
-    }, 1000); // Simula el tiempo de carga del QR
+    try {
+        const response = await fetch(`${BASE_URL}Family/GenerateRelativeQRCodeDataAjax`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: `contact_id=${encodeURIComponent(contactId)}`
+        });
 
+        const result = await response.json();
+
+        if (!result.success) throw new Error(result.message);
+
+        qrContainer.innerHTML = '';
+
+        new QRCode(qrContainer, {
+            text: result.qr_token,
+            width: 200,
+            height: 200,
+            colorDark : "#198754",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+
+    } catch (error) {
+        qrContainer.innerHTML = `<p class="text-danger small">Error: ${error.message}</p>`;
+        personNameDisplay.innerText = "Error al generar";
+    }
 }
+
 </script>

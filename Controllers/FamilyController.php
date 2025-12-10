@@ -77,9 +77,9 @@ class FamilyController extends Controllers
         
         if ($result === 'matricula_exists') {
              Session::setSession('alert_message', [
-                'type' => 'warning',
-                'title' => 'Dato Duplicado',
-                'text' => 'La matrícula ingresada ya existe en el sistema.'
+                 'type' => 'warning',
+                 'title' => 'Dato Duplicado',
+                 'text' => 'La matrícula ingresada ya existe en el sistema.'
              ]);
              header('Location: ' . URL . 'Family/RegisterStudent');
              exit;
@@ -251,6 +251,118 @@ class FamilyController extends Controllers
 
         // 7. Redirigir de vuelta a la vista de contactos
         header('Location: ' . URL . 'Family/RegisterRelative');
+        exit;
+    }
+    
+    /**
+     * Muestra el QR del usuario principal (titular de la cuenta).
+     * Corresponde a la ruta: URL/Family/GenerateQRCode
+     */
+    public function GenerateQRCode()
+    {
+        // 1. Verificar sesión
+        if (!Session::getSession('User')) {
+            header('Location: ' . URL);
+            exit;
+        }
+
+        // 2. Obtener el ID del usuario principal
+        $userId = Session::getSession('User')['id'] ?? 0;
+
+        if ($userId === 0) {
+            Session::setSession('alert_message', [
+                'type' => 'error',
+                'title' => 'Error de Autenticación',
+                'text' => 'No se pudo identificar al usuario principal para generar el QR.'
+            ]);
+            header('Location: ' . URL . 'Family/RegisterRelative');
+            exit;
+        }
+
+        // 3. Llamar al modelo para generar/obtener la información del QR
+        $qrResult = $this->model->generateMainUserQRCodeData($userId); 
+
+        if ($qrResult) {
+            // ÉXITO: Pasar los datos del QR a una vista para mostrar el código
+            $data = [
+                'qr_data' => $qrResult, // Puede ser la URL de la imagen o los datos que la vista necesita
+                'user_name' => Session::getSession('User')['full_name'] ?? 'Usuario Principal'
+            ];
+            
+            // 4. Renderizar la vista de visualización del QR (debes crear views/family/showqrcode.php)
+            $this->view->render($this, "showqrcode", $data);
+
+        } else {
+            // FALLO en la generación del QR
+            Session::setSession('alert_message', [
+                'type' => 'error',
+                'title' => 'Error de Generación',
+                'text' => 'Ocurrió un error al generar el código QR. Inténtalo de nuevo.'
+            ]);
+            header('Location: ' . URL . 'Family/RegisterRelative');
+            exit;
+        }
+    }
+
+    // =========================================================
+    // NUEVO: ENDPOINT AJAX PARA QR DE CONTACTOS (FAMILIARES)
+    // =========================================================
+
+    /**
+     * Endpoint AJAX para generar el token QR de un familiar/contacto específico.
+     * Responde siempre con JSON.
+     * Corresponde a la ruta (ejemplo): URL/Family/GenerateRelativeQRCodeDataAjax
+     */
+    public function GenerateRelativeQRCodeDataAjax()
+    {
+        // 1. Establecer el encabezado crucial para la respuesta AJAX (JSON)
+        header('Content-Type: application/json');
+        
+        // 2. Verificar Seguridad (POST y Sesión Activa)
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::getSession('User')) {
+            http_response_code(401); // 401 Unauthorized
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado o sesión expirada.']);
+            // MUY IMPORTANTE: Salir inmediatamente.
+            exit;
+        }
+
+        // 3. Obtener y validar el ID del contacto
+        $contactId = filter_input(INPUT_POST, 'contact_id', FILTER_VALIDATE_INT);
+        
+        if ($contactId === false || $contactId === null || $contactId <= 0) {
+            http_response_code(400); // 400 Bad Request
+            echo json_encode(['success' => false, 'message' => 'ID de contacto no válido o faltante.']);
+            exit;
+        }
+        
+        try {
+            // 4. Llamar a la función del modelo para generar el token
+            $qrToken = $this->model->generateRelativeQRCodeData($contactId);
+
+            // 5. Manejar el resultado
+            if ($qrToken) {
+                // Éxito: Devolver el token
+                http_response_code(200); // 200 OK
+                echo json_encode([
+                    'success' => true, 
+                    'qr_token' => $qrToken,
+                    'contact_id' => $contactId,
+                    'message' => 'Token QR generado con éxito.'
+                ]);
+            } else {
+                // Fallo del modelo (puede que el contacto no exista o no pertenezca al usuario)
+                http_response_code(403); // 403 Forbidden o 404 Not Found, es más específico que 500
+                echo json_encode(['success' => false, 'message' => 'El contacto no existe o no está autorizado para este usuario.']);
+            }
+            
+        } catch (Exception $e) {
+            // 6. Manejar cualquier excepción de la base de datos o sistema
+            http_response_code(500); // 500 Internal Server Error
+            error_log("Error al generar QR para contacto ID $contactId: " . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Fallo interno del servidor. ' . $e->getMessage()]);
+        }
+
+        // 7. Finalizar la ejecución
         exit;
     }
 }
