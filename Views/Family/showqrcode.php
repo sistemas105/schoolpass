@@ -55,15 +55,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     try {
+    const qrText = "<?= URL ?>Scan/Verify?token=<?= urlencode($qr_token) ?>";
         // Inicializar QRCode.js en el contenedor
-        new QRCode(container, {
-            text: qrData,
-            width: 250,
-            height: 250,
-            colorDark : "#198754", // Color verde Bootstrap
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H // Alta corrección de errores
-        });
+      new QRCode(document.getElementById("qr"), {
+    text: qrText,
+    width: 250,
+    height: 250
+});
         
     } catch (e) {
         console.error("Error al generar el QR:", e);

@@ -190,8 +190,8 @@ $current_user_id = Session::getSession('User')['id'] ?? 'N/A';
                 <h5 class="modal-title" id="newContactModalLabel">Registrar Nuevo Familiar/Contacto</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <!-- El formulario apunta a la acción de creación -->
-            <form action="<?php echo htmlspecialchars($URL); ?>Family/CreateRelative" method="POST">
+
+            <form action="<?php echo htmlspecialchars($URL); ?>Family/CreateRelative" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="form-group mb-3">
                         <label for="full_name" class="form-label">Nombre Completo del Contacto</label>
@@ -224,6 +224,10 @@ $current_user_id = Session::getSession('User')['id'] ?? 'N/A';
                         <label for="email" class="form-label">Correo Electrónico (Opcional)</label>
                         <input type="email" class="form-control" id="email" name="email">
                     </div>
+                    <div class="form-group">
+    <label for="foto_contacto">Foto del contacto</label>
+   <input type="file" name="photo" accept="image/*" required>
+</div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -354,13 +358,14 @@ async function generateQR(contactId, contactName) {
 
     try {
         const response = await fetch(`${BASE_URL}Family/GenerateRelativeQRCodeDataAjax`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: `contact_id=${encodeURIComponent(contactId)}`
-        });
+    method: 'POST',
+    credentials: 'include',               // ← Aquí
+    headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: `contact_id=${encodeURIComponent(contactId)}`
+});
 
         const result = await response.json();
 

@@ -1,7 +1,4 @@
 <?php
-// Asegúrate de que esta ruta sea correcta para tu proyecto
-// require_once LBS . 'Model.php'; 
-
 class Family_model extends Model
 {
     // Las tablas principales con las que este modelo interactúa.
@@ -85,24 +82,30 @@ class Family_model extends Model
      * @param array $data Los datos del contacto (debe incluir 'role', 'full_name', 'phone', 'email').
      * @return bool Resultado de la operación.
      */
-    public function registerContact($userId, $data)
-    {
-        // 1. Preparar los datos usando user_id
-        $insertData = [
-            'user_id'       => $userId, // ⭐️ CLAVE FORÁNEA: user_id ⭐️
-            'role'          => $data['role'],      // Coincide con el ENUM de la DB (image_e58b0f.png)
-            'full_name'     => $data['full_name'],
-            'phone'         => $data['phone'] ?? null,
-            'email'         => $data['email'] ?? null,
-            // photo_path se deja a NULL
-        ];
+  public function registerContact($userId, $data)
+{
+    // Normalizar/asegurar claves y valores
+    $phone = isset($data['phone']) && $data['phone'] !== '' ? $data['phone'] : null;
+    $email = isset($data['email']) && $data['email'] !== '' ? $data['email'] : null;
+    // En tu controlador usas $data['photo'] al subir la imagen; aquí lo mapeamos a photo_path
+    $photoPath = isset($data['photo']) && $data['photo'] !== '' ? $data['photo'] : null;
 
-        // 2. Ejecutar la inserción
-        $valueString = ' (user_id, role, full_name, phone, email) 
-                             VALUES (:user_id, :role, :full_name, :phone, :email)';
-                             
-        return $this->db->insert($this->contactTable, $insertData, $valueString); 
-    }
+    // Preparar datos a insertar (coincide con columnas de la tabla contacts)
+    $insertData = [
+        'user_id'   => $userId,
+        'role'      => $data['role'],
+        'full_name' => $data['full_name'],
+        'phone'     => $phone,
+        'email'     => $email,
+        'photo_path'=> $photoPath
+    ];
+
+    // Query string esperado por tu método insert()
+    $valueString = ' (user_id, role, full_name, phone, email, photo_path) 
+                     VALUES (:user_id, :role, :full_name, :phone, :email, :photo_path)';
+
+    return $this->db->insert($this->contactTable, $insertData, $valueString);
+}
 
     /**
      * Obtiene la lista de contactos asociados directamente al usuario (tutor principal).
@@ -121,11 +124,7 @@ class Family_model extends Model
         return $result['results'] ?? [];
     }
     
-    /**
-     * Actualiza el teléfono y el correo electrónico de un contacto.
-     * * @param array $data Array asociativo con 'id', 'phone', y 'email'.
-     * @return bool True si la actualización fue exitosa, false en caso contrario.
-     */
+  
     public function updateContactInfo(array $data): bool {
         // Asegúrate de que los campos requeridos estén presentes
         if (!isset($data['id'])) {
@@ -164,54 +163,74 @@ class Family_model extends Model
             return false;
         }
     }
-    public function generateMainUserQRCodeData(int $userId)
-    {
-        // 1. Generar un identificador único y seguro (ej. un JWT o un hash)
-        // Por motivos de simulación, usamos un hash simple basado en el ID y el tiempo actual.
-        // **REEMPLAZAR ESTO POR LÓGICA DE SEGURIDAD REAL EN PRODUCCIÓN**
-        
-        $currentTimestamp = time();
-        
-        // Cadena de datos que se leerá en el punto de control
-        // Formato: TIPO|ID|TIMESTAMP|HASH_DE_SEGURIDAD
-        $dataToEncode = "TUTOR_PRINCIPAL|{$userId}|{$currentTimestamp}";
-
-        // En producción, aquí harías una llamada a la DB para guardar este token,
-        // establecer su caducidad y recuperar los datos que necesita el lector.
-        
-        // Simulación de token/data para el QR:
-        if ($userId > 0) {
-            // Ejemplo de token seguro (se recomienda usar una librería de JWT o encriptación)
-            $secureToken = "auth-token-user-{$userId}-" . md5($dataToEncode . 'tu_clave_secreta_aqui');
-            return $secureToken;
-        }
-
+   public function generateMainUserQRCodeData(int $userId)
+{
+    if ($userId <= 0) {
         return false;
     }
-    public function generateRelativeQRCodeData(int $contactId)
-    {
-        if ($contactId <= 0) {
-            return false;
-        }
 
-        // Obtener el ID del usuario principal logueado para seguridad
-        $userId = Session::getSession('User')['id'] ?? 0;
+    $timestamp = time();
 
-        // 1. Verificar que el contacto exista y pertenezca al usuario logueado.
-        $sql = "SELECT id, full_name FROM contacts WHERE id = ? AND user_id = ?";
-        $contact = $this->db->selectOne($sql, [$contactId, $userId]);
+    $payload = [
+        'type'   => 'MAIN_USER',
+        'userId' => $userId,
+        'time'   => $timestamp,
+        'hash'   => hash(
+            'sha256',
+            $userId . $timestamp . SECRET_KEY
+        )
+    ];
 
-        if (!$contact) {
-            return false; // Contacto no encontrado o no pertenece a este usuario
-        }
+    // 🔐 IMPORTANTE: JSON + BASE64
+    return base64_encode(json_encode($payload));
+}
+    public function generateRelativeQRCodeData($contactId)
+{
+    $userId = Session::getSession('User')['id'] ?? 0;
 
-        // 2. Simulación de generación de Token Único para el Contacto
-        // Formato: TIPO_CONTACTO|ID_CONTACTO|ID_USER_TITULAR|TIMESTAMP_EXPIRACION
-        $tokenPayload = "CONTACT|{$contactId}|{$userId}|" . time() . "|" . hash('sha256', $contactId . $userId . SECRET_KEY);
-        
-        // Cifrado simple (simulación de seguridad)
-        $encryptedToken = base64_encode($tokenPayload);
+    $result = $this->db->select3(
+        '*',
+        $this->contactTable,
+        " WHERE id = ? AND user_id = ? ",
+        [$contactId, $userId]
+    );
 
-        return $encryptedToken;
+    if (empty($result['results'])) {
+        return false;
     }
+
+    $timestamp = time();
+    $hash = hash('sha256', $contactId . $userId . $timestamp . SECRET_KEY);
+
+    // TOKEN SIMPLE (puede ir en base64)
+    $token = base64_encode(json_encode([
+        'contactId' => $contactId,
+        'userId'    => $userId,
+        'time'      => $timestamp,
+        'hash'      => $hash
+    ]));
+
+    // 🚨 ESTO ES LO QUE VA EN EL QR
+    return URL . "Scan/Verify?token=" . urlencode($token);
+}
+public function getContactForUser(int $contactId, int $userId): ?array
+{
+    $result = $this->db->select3(
+        '*',
+        $this->contactTable,
+        " WHERE id = ? AND user_id = ? ",
+        [$contactId, $userId]
+    );
+
+    if (
+        isset($result['results']) &&
+        is_array($result['results']) &&
+        count($result['results']) > 0
+    ) {
+        return $result['results'][0];
+    }
+
+    return null;
+}
+
 }
