@@ -12,6 +12,7 @@
 >
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
  <link rel="stylesheet" href="<?php echo URL . RQ ?>css/style.css" />
+
 </head>
 
 <?php
@@ -41,10 +42,10 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li>
-                                <a class="dropdown-item" href="<?php echo URL; ?>Family/RegisterStudent">Dar alta Alumno</a>
+                                <a class="dropdown-item" href="<?php echo URL; ?>Family/RegisterStudent">Alumno</a>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="<?php echo URL; ?>Family/RegisterRelative">Dar de alta Familiar</a>
+                                <a class="dropdown-item" href="<?php echo URL; ?>Family/RegisterRelative">QR Familiar</a>
                             </li>
                             </ul>
                     </li>

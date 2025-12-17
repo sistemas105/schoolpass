@@ -17,77 +17,72 @@ class ScanController extends Controllers
 {
     $token = $_GET['token'] ?? '';
 
+    $log = [
+        'user_id'    => null,
+        'contact_id' => null,
+        'scanned_at' => date('Y-m-d H:i:s'),
+        'ip'         => $_SERVER['REMOTE_ADDR'] ?? null,
+        'agent'      => $_SERVER['HTTP_USER_AGENT'] ?? null,
+        'status'     => 'INVALID'
+    ];
+
     if (!$token) {
+        $this->model->logQRScan($log);
         die('QR inválido');
     }
 
-    $data = json_decode(base64_decode($token), true);
-
-    if (!$data || !isset($data['type'])) {
+    $decoded = json_decode(base64_decode($token), true);
+    if (!$decoded) {
+        $this->model->logQRScan($log);
         die('Token corrupto');
     }
 
-    $time = $data['time'] ?? 0;
+    $contactId = $decoded['contactId'];
+    $userId    = $decoded['userId'];
+    $time      = $decoded['time'];
+    $hash      = $decoded['hash'];
 
-    // ⏱️ Caducidad: 30 segundos
-    if (time() - $time > 600) {
+    $log['user_id']    = $userId;
+    $log['contact_id'] = $contactId ?: null;
+
+    // ⏱️ Expiración
+    if (time() - $time > 30) {
+        $log['status'] = 'EXPIRED';
+        $this->model->logQRScan($log);
         die('QR expirado');
     }
 
-    /* ===============================
-       QR DEL USUARIO PRINCIPAL
-       =============================== */
-    if ($data['type'] === 'MAIN_USER') {
-
-        $userId = $data['userId'];
-
-        $checkHash = hash(
-            'sha256',
-            $userId . $time . SECRET_KEY
-        );
-
-        if ($checkHash !== $data['hash']) {
-            die('QR no válido');
-        }
-
-        $this->view->render($this, 'verifyqr', [
-            'name'  => 'Tutor principal autorizado',
-            'photo' => null
-        ]);
-        return;
+    // 🔐 Hash
+    $checkHash = hash('sha256', $contactId . $userId . $time . SECRET_KEY);
+    if ($checkHash !== $hash) {
+        $log['status'] = 'INVALID';
+        $this->model->logQRScan($log);
+        die('QR no válido');
     }
 
-    /* ===============================
-       QR DE CONTACTO
-       =============================== */
-    if ($data['type'] === 'CONTACT') {
-
-        $contactId = $data['contactId'];
-        $userId    = $data['userId'];
-
-        $checkHash = hash(
-            'sha256',
-            $contactId . $userId . $time . SECRET_KEY
-        );
-
-        if ($checkHash !== $data['hash']) {
-            die('QR no válido');
-        }
-
-        $contact = $this->model->getContactForUser($contactId, $userId);
-
+    // 🔎 Contacto
+    if ($contactId > 0) {
+        $contact = $this->model->getContactByIdAndUser($contactId, $userId);
         if (!$contact) {
+            $log['status'] = 'NOT_FOUND';
+            $this->model->logQRScan($log);
             die('Contacto no encontrado');
         }
-
-        $this->view->render($this, 'verifyqr', [
-            'name'  => $contact['full_name'],
-            'photo' => $contact['photo_path']
-        ]);
-        return;
+    } else {
+        $contact = [
+            'full_name' => 'Tutor',
+            'photo_path' => null
+        ];
     }
 
-    die('Tipo de QR no reconocido');
+    // ✅ ÉXITO
+    $log['status'] = 'OK';
+    $this->model->logQRScan($log);
+
+    $this->view->render($this, 'verifyqr', [
+        'name'  => $contact['full_name'],
+        'photo' => $contact['photo_path']
+    ]);
 }
 
 }

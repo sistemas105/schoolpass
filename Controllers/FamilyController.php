@@ -299,7 +299,7 @@ class FamilyController extends Controllers
      * Muestra el QR del usuario principal (titular de la cuenta).
      * Corresponde a la ruta: URL/Family/GenerateQRCode
      */
-    public function GenerateQRCode()
+ public function GenerateQRCode()
 {
     if (!Session::getSession('User')) {
         header('Location: ' . URL);
@@ -309,7 +309,7 @@ class FamilyController extends Controllers
     $user = Session::getSession('User');
 
     $data = [
-        'contactId' => 0,              // 0 = usuario principal
+        'contactId' => 0,
         'userId'    => $user['id'],
         'time'      => time(),
     ];
@@ -319,14 +319,22 @@ class FamilyController extends Controllers
         $data['contactId'] . $data['userId'] . $data['time'] . SECRET_KEY
     );
 
-    // 🔑 SOLO EL TOKEN
-    $token = base64_encode(json_encode($data));
+    // 🔐 TOKEN SEGURO PARA URL / QR
+    $token = rtrim(strtr(
+        base64_encode(json_encode($data)),
+        '+/',
+        '-_'
+    ), '=');
 
-    // Mandarlo a la vista para que se genere el QR
-    $this->view->render($this, 'qrcode', [
-        'qr_token' => $token
+    // ✅ Pasar datos correctamente a la vista
+    $this->view->render($this, 'showqrcode', [
+        'qr_token'  => $token,
+        'user_name' => $user['full_name']
     ]);
 }
+
+
+
 
 
 public function GenerateRelativeQRCodeDataAjax()

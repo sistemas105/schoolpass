@@ -79,6 +79,8 @@
                                 <option value="" selected disabled>Seleccione...</option>
                                 <option value="Preescolar">Preescolar</option>
                                 <option value="Primaria">Primaria</option>
+                                <option value="Secundaria">Secundaria</option>
+                                <option value="Preparatoria">Preparatoria</option>
                             </select>
                         </div>
                         <div class="col-md-4 mb-3">

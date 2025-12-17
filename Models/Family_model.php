@@ -232,5 +232,53 @@ public function getContactForUser(int $contactId, int $userId): ?array
 
     return null;
 }
+public function getContactByIdAndUser($contactId, $userId)
+{
+    $attr  = "id, full_name, photo_path";
+    $table = "contacts";
+    $where = " WHERE id = ? AND user_id = ? LIMIT 1";
+    $param = [$contactId, $userId];
+
+    $response = $this->db->select1($attr, $table, $where, $param);
+
+    return $response['results'][0] ?? null;
+}
+public function logQRScan($data)
+{
+    $sql = "INSERT INTO qr_scan_logs 
+            (user_id, contact_id, scanned_at, scanned_by_ip, user_agent, status)
+            VALUES (?, ?, ?, ?, ?, ?)";
+
+    return $this->db->insert(
+        "qr_scan_logs",
+        [
+            $data['user_id'],
+            $data['contact_id'],
+            $data['scanned_at'],
+            $data['ip'],
+            $data['agent'],
+            $data['status']
+        ],
+        "(user_id, contact_id, scanned_at, scanned_by_ip, user_agent, status)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+}
+public function getQRScanLogsByUser($userId)
+{
+    $sql = "SELECT l.*, c.full_name
+            FROM qr_scan_logs l
+            LEFT JOIN contacts c ON c.id = l.contact_id
+            WHERE l.user_id = ?
+            ORDER BY l.scanned_at DESC";
+
+    return $this->db->select4(
+        "*",
+        "qr_scan_logs l
+         LEFT JOIN contacts c ON c.id = l.contact_id
+         WHERE l.user_id = ?",
+        [$userId]
+    )['results'];
+}
+
 
 }
