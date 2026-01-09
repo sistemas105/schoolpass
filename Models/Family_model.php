@@ -18,19 +18,17 @@ class Family_model extends Model
      * @param int $familyId El ID de la familia a buscar.
      * @return array La lista de alumnos.
      */
-    public function getStudentsByFamilyId($familyId)
-    {
-        // Asumiendo que $this->db->select3 es el método para SELECT
-        $result = $this->db->select3(
-            '*', 
-            $this->studentTable,
-            " WHERE family_id = ?", 
-            [$familyId]
-        );
-        
-        return $result['results'] ?? [];
-    }
+    public function getStudentsByUser($userId)
+{
+    $result = $this->db->select1(
+        '*',
+        'students',
+        ' WHERE user_id = :user_id',
+        ['user_id' => $userId]
+    );
 
+    return $result['results'] ?? [];
+}
     /**
      * Verifica si una matrícula ya existe.
      */
@@ -49,7 +47,7 @@ class Family_model extends Model
     /**
      * Registra un nuevo alumno.
      */
-    public function registerStudent($familyId, $fullName, $nivel, $grado, $grupo, $matricula)
+    public function registerStudent($userId, $fullName, $nivel, $grado, $grupo, $matricula)
     {
         // 1. Verificar si la matrícula ya existe
         if ($this->matriculaExists($matricula)) {
@@ -58,7 +56,7 @@ class Family_model extends Model
 
         // 2. Datos a insertar
         $insertData = [
-            'family_id' => $familyId,
+            'user_id' => $userId,
             'full_name' => $fullName,
             'nivel' => $nivel,
             'grado' => $grado,
@@ -68,8 +66,8 @@ class Family_model extends Model
         ];
 
         // 3. Ejecutar la inserción
-        $valueString = ' (family_id, full_name, nivel, grado, grupo, matricula, active) 
-                             VALUES (:family_id, :full_name, :nivel, :grado, :grupo, :matricula, :active)';
+       $valueString = ' (user_id, full_name, nivel, grado, grupo, matricula, active)
+                     VALUES (:user_id, :full_name, :nivel, :grado, :grupo, :matricula, :active)';
                              
         return $this->db->insert($this->studentTable, $insertData, $valueString);
     }
@@ -279,6 +277,77 @@ public function getQRScanLogsByUser($userId)
         [$userId]
     )['results'];
 }
+public function getUserById($userId)
+{
+    return $this->db->select1(
+        '*',
+        'users',
+        ' WHERE id = ? LIMIT 1',
+        [$userId]
+    )['results'][0] ?? null;
+}
 
+public function updateUserProfile($userId, $fullName, $photoPath = null)
+{
+    if ($photoPath) {
+        $sql = "UPDATE users SET full_name = ?, photo_path = ? WHERE id = ?";
+        return $this->db->update(
+            "users",
+            [$fullName, $photoPath, $userId],
+            "full_name = ?, photo_path = ?",
+            " WHERE id = ?"
+        );
+    } else {
+        return $this->db->update(
+            "users",
+            [$fullName, $userId],
+            "full_name = ?",
+            " WHERE id = ?"
+        );
+    }
+}
+public function updateStudent($id, $fullName, $nivel, $grado, $grupo, $photoPath)
+{
+    $params = [
+        'full_name'  => $fullName,
+        'nivel'      => $nivel,
+        'grado'      => $grado,
+        'grupo'      => $grupo,
+        'photo_path' => $photoPath,
+        'id'         => $id
+    ];
 
+    $set = "
+        full_name = :full_name,
+        nivel = :nivel,
+        grado = :grado,
+        grupo = :grupo,
+        photo_path = :photo_path
+    ";
+
+    $where = " WHERE id = :id";
+
+    return $this->db->update(
+        'students',
+        $params,
+        $set,
+        $where
+    );
+}
+public function getStudentByIdAndUser($studentId, $userId)
+{
+    $attr="*";
+    $sql = " students INNER JOIN users u ON u.id = :user_id
+        WHERE students.id = :student_id
+    ";
+
+    $params = [
+        'student_id' => $studentId,
+        'user_id'    => $userId
+    ];
+
+     $result = $this->db->select4($attr, $sql, $params);
+
+    return $result['results'][0] ?? null;
+}
 }

@@ -11,31 +11,19 @@ class FamilyController extends Controllers
      * Corresponde a la ruta: URL/Family/RegisterStudent
      */
     public function RegisterStudent()
-    {
-        if (!Session::getSession('User')) {
-            header('Location: ' . URL);
-            exit;
-        }
-
-        // 1. OBTENER FAMILY_ID
-        // Nota: Mantenemos family_id aquí ya que la tabla students (image_2d31bd.png) aún la usa.
-        $familyId = Session::getSession('User')['family_id'] ?? 0;
-
-        // 2. OBTENER LA LISTA DE ALUMNOS DE LA DB
-        $students = [];
-        if ($familyId > 0) {
-            // Asumiendo que getStudentsByFamilyId existe o será creado en el modelo
-            $students = $this->model->getStudentsByFamilyId($familyId); 
-        }
-        
-        $data = [
-            'students' => $students
-        ];
-
-        // 3. Renderizar la vista, pasando los datos de los alumnos
-        $this->view->render($this, "registerstudent", $data);
+{
+    if (!Session::getSession('User')) {
+        header('Location: ' . URL);
+        exit;
     }
 
+    $userId = Session::getSession('User')['id'];
+    $students = $this->model->getStudentsByUser($userId);
+
+    $this->view->render($this, 'registerstudent', [
+        'students' => $students
+    ]);
+}
     /**
      * Procesa la inserción del nuevo alumno.
      * Corresponde a la ruta: URL/Family/CreateStudent
@@ -49,7 +37,7 @@ class FamilyController extends Controllers
         }
 
         // 2. Obtener datos y family_id del usuario logueado
-        $familyId = Session::getSession('User')['family_id'] ?? 0; // Usar 0 si no está en sesión
+       $userId = Session::getSession('User')['id'];
         
         $fullName = trim($_POST['full_name'] ?? '');
         $nivel = trim($_POST['nivel'] ?? '');
@@ -60,7 +48,7 @@ class FamilyController extends Controllers
         $hasError = false;
         
         // 3. VALIDACIÓN
-        if (empty($fullName) || empty($nivel) || empty($matricula) || $familyId === 0) {
+        if (empty($fullName) || empty($nivel) || empty($matricula) || $userId === 0) {
             // Aquí incluimos la validación de familyId, ya que es crítica para students.
             $hasError = true;
             // Si hay errores, deberías guardar un mensaje de alerta aquí.
@@ -73,7 +61,14 @@ class FamilyController extends Controllers
         }
         
         // 4. Inserción en la DB
-        $result = $this->model->registerStudent($familyId, $fullName, $nivel, $grado, $grupo, $matricula);
+        $result = $this->model->registerStudent(
+    $userId,
+    $fullName,
+    $nivel,
+    $grado,
+    $grupo,
+    $matricula
+);
         
         if ($result === 'matricula_exists') {
              Session::setSession('alert_message', [
@@ -328,9 +323,12 @@ class FamilyController extends Controllers
 
     // ✅ Pasar datos correctamente a la vista
     $this->view->render($this, 'showqrcode', [
-        'qr_token'  => $token,
-        'user_name' => $user['full_name']
-    ]);
+    'qr_token'   => $token,
+    'user_name'  => $user['full_name'],
+    'user_photo' => !empty($user['photo_path'])
+        ? URL . $user['photo_path']
+        : URL . 'Resource/images/user_default.png'
+]);
 }
 
 
@@ -388,4 +386,154 @@ public function getContactByIdAndUser($contactId, $userId)
 
     return $this->db->selectOne($sql, [$contactId, $userId]);
 }
+public function Profile()
+{
+    if (!Session::getSession('User')) {
+        header('Location: ' . URL);
+        exit;
+    }
+
+    $userId = Session::getSession('User')['id'];
+    $user = $this->model->getUserById($userId);
+
+    $this->view->render($this, 'profile', [
+        'user' => $user
+    ]);
+}
+public function UpdateProfile()
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::getSession('User')) {
+        header('Location: ' . URL);
+        exit;
+    }
+
+    $userId = Session::getSession('User')['id'];
+    $fullName = trim($_POST['full_name'] ?? '');
+
+    if (empty($fullName)) {
+        Session::setSession('alert_message', [
+            'type' => 'error',
+            'title' => 'Error',
+            'text' => 'El nombre no puede estar vacío'
+        ]);
+        header('Location: ' . URL . 'Family/Profile');
+        exit;
+    }
+
+    /* ===== SUBIR FOTO ===== */
+    $photoPath = null;
+
+    if (!empty($_FILES['photo']['name'])) {
+
+        $uploadDir = $_SERVER['DOCUMENT_ROOT'] . "/Resource/user_photos/";
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+        $validExt = ['jpg', 'jpeg', 'png'];
+
+        if (!in_array($ext, $validExt)) {
+            Session::setSession('alert_message', [
+                'type' => 'error',
+                'title' => 'Formato inválido',
+                'text' => 'Solo se permiten imágenes JPG o PNG'
+            ]);
+            header('Location: ' . URL . 'Family/Profile');
+            exit;
+        }
+
+        $fileName = "user_" . $userId . "_" . time() . "." . $ext;
+        $fullPath = $uploadDir . $fileName;
+
+        if (move_uploaded_file($_FILES['photo']['tmp_name'], $fullPath)) {
+            $photoPath = "/Resource/user_photos/" . $fileName;
+        }
+    }
+
+    $this->model->updateUserProfile($userId, $fullName, $photoPath);
+
+    // actualizar sesión
+    $userSession = Session::getSession('User');
+    $userSession['full_name'] = $fullName;
+    if ($photoPath) {
+        $userSession['photo_path'] = $photoPath;
+    }
+    Session::setSession('User', $userSession);
+
+    Session::setSession('alert_message', [
+        'type' => 'success',
+        'title' => 'Perfil actualizado',
+        'text' => 'Los cambios se guardaron correctamente'
+    ]);
+
+    header('Location: ' . URL . 'Family/Profile');
+    exit;
+}
+public function UpdateStudent()
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::getSession('User')) {
+        header('Location: ' . URL);
+        exit;
+    }
+
+    $userId    = Session::getSession('User')['id'];
+    $studentId = (int)($_POST['student_id'] ?? 0);
+
+    if ($studentId <= 0) {
+        die('ID inválido');
+    }
+
+    $student = $this->model->getStudentByIdAndUser($studentId, $userId);
+    if (!$student) {
+        die('Acceso no autorizado');
+    }
+
+    $photoPath = $student['photo_path'];
+
+    /* 📸 SUBIDA DE FOTO */
+    if (
+        isset($_FILES['photo']) &&
+        $_FILES['photo']['error'] === UPLOAD_ERR_OK
+    ) {
+        $folder = 'Resource/uploads/students/';
+        if (!is_dir($folder)) {
+            mkdir($folder, 0755, true);
+        }
+
+        $ext = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+        if (!in_array($ext, $allowed)) {
+            die('Formato de imagen no permitido');
+        }
+
+        $fileName = 'student_' . $studentId . '_' . time() . '.' . $ext;
+        $fullPath = $folder . $fileName;
+
+
+        if (move_uploaded_file($_FILES['photo']['tmp_name'], $fullPath)) {
+            $photoPath = $fullPath;
+        }
+    }
+
+    /* 🧠 UPDATE */
+    $this->model->updateStudent(
+        $studentId,
+        trim($_POST['full_name']),
+        trim($_POST['nivel']),
+        trim($_POST['grado']),
+        trim($_POST['grupo']),
+        $photoPath
+    );
+Session::setSession('alert_message', [
+    'type'  => 'success',
+    'title' => 'Alumno actualizado',
+    'text'  => 'Los datos del alumno se actualizaron correctamente.'
+]);
+    header('Location: ' . URL . 'Family/RegisterStudent');
+    exit;
+}
+
+
 }

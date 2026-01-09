@@ -61,19 +61,26 @@ class ScanController extends Controllers
     }
 
     // 🔎 Contacto
-    if ($contactId > 0) {
-        $contact = $this->model->getContactByIdAndUser($contactId, $userId);
-        if (!$contact) {
-            $log['status'] = 'NOT_FOUND';
-            $this->model->logQRScan($log);
-            die('Contacto no encontrado');
-        }
-    } else {
-        $contact = [
-            'full_name' => 'Tutor',
-            'photo_path' => null
-        ];
+   if ($contactId > 0) {
+
+    // ▶ AUTORIZADO
+    $contact = $this->model->getContactByIdAndUser($contactId, $userId);
+    if (!$contact) {
+        $log['status'] = 'NOT_FOUND';
+        $this->model->logQRScan($log);
+        die('Contacto no encontrado');
     }
+
+} else {
+
+    // ▶ TUTOR
+    $contact = $this->model->getUserById($userId);
+    if (!$contact) {
+        $log['status'] = 'NOT_FOUND';
+        $this->model->logQRScan($log);
+        die('Tutor no encontrado');
+    }
+}
 
     // ✅ ÉXITO
     $log['status'] = 'OK';
